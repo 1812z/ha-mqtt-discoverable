@@ -93,6 +93,13 @@ class EntityInfo(BaseModel):
     unique_id: str | None = None
     """Set this to enable editing sensor from the HA ui and to integrate with a
         device"""
+    display_name: str | None = None
+    """Display name for Home Assistant UI. If not set, uses name.
+    Example: name='bluetooth_power', display_name='蓝牙'"""
+    state_topic: str | None = None
+    """Custom state topic for publishing entity state.
+    If not set, will be auto-generated from name and device.
+    Example: state_topic='home/pc/bluetooth/state'"""
 
     @model_validator(mode="before")
     @classmethod
@@ -190,8 +197,10 @@ class Discoverable(Generic[EntityType]):
         # Full topic where we publish our own state messages
         # Prepend the `state_prefix`, default: `hmd`
         # e.g. hmd/binary_sensor/mydevice/mysensor
-        self.state_topic = f"{self._settings.mqtt.state_prefix}/{self._entity_topic}/state"
-
+        if self._entity.state_topic:
+            self.state_topic = self._entity.state_topic
+        else:
+            self.state_topic = f"{self._settings.mqtt.state_prefix}/{self._entity_topic}/state"
         # Full topic where we publish our own attributes as JSON messages
         # Prepend the `state_prefix`, default: `hmd`
         # e.g. hmd/binary_sensor/mydevice/mysensor
