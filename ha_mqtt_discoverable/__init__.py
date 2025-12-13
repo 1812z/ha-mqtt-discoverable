@@ -201,6 +201,7 @@ class Discoverable(Generic[EntityType]):
             self.state_topic = self._entity.state_topic
         else:
             self.state_topic = f"{self._settings.mqtt.state_prefix}/{self._entity_topic}/state"
+
         # Full topic where we publish our own attributes as JSON messages
         # Prepend the `state_prefix`, default: `hmd`
         # e.g. hmd/binary_sensor/mydevice/mysensor
@@ -253,20 +254,28 @@ wrote_configuration: {self.wrote_configuration}
                 certfile=mqtt_settings.tls_certfile,
                 keyfile=mqtt_settings.tls_key,
                 cert_reqs=ssl.CERT_REQUIRED,
-                tls_version=ssl.PROTOCOL_TLS_CLIENT,
+                tls_version=ssl.PROTOCOL_TLS,
             )
         elif mqtt_settings.use_tls:
             logger.info(f"Connecting to {mqtt_settings.host}:{mqtt_settings.port} with SSL and username/password authentication")
             logger.debug(f"ca_certs={mqtt_settings.tls_ca_cert}")
-            self.mqtt_client.tls_set(
-                ca_certs=mqtt_settings.tls_ca_cert,
-                cert_reqs=ssl.CERT_REQUIRED,
-                tls_version=ssl.PROTOCOL_TLS_CLIENT,
-            )
-            self.mqtt_client.username_pw_set(mqtt_settings.username, password=mqtt_settings.password)
+            if mqtt_settings.tls_ca_cert:
+                self.mqtt_client.tls_set(
+                    ca_certs=mqtt_settings.tls_ca_cert,
+                    cert_reqs=ssl.CERT_REQUIRED,
+                    tls_version=ssl.PROTOCOL_TLS,
+                )
+            else:
+                self.mqtt_client.tls_set(
+                    cert_reqs=ssl.CERT_REQUIRED,
+                    tls_version=ssl.PROTOCOL_TLS,
+                )
+            if mqtt_settings.username:
+                self.mqtt_client.username_pw_set(mqtt_settings.username, password=mqtt_settings.password)
         else:
             logger.debug(f"Connecting to {mqtt_settings.host}:{mqtt_settings.port} without SSL")
-            self.mqtt_client.username_pw_set(mqtt_settings.username, password=mqtt_settings.password)
+            if mqtt_settings.username:
+                self.mqtt_client.username_pw_set(mqtt_settings.username, password=mqtt_settings.password)
         if on_connect:
             logger.debug("Registering custom callback function")
             self.mqtt_client.on_connect = on_connect
@@ -338,6 +347,9 @@ wrote_configuration: {self.wrote_configuration}
         """
         # Automatically generate a dict using pydantic
         config = self._entity.model_dump(exclude_none=True, by_alias=True)
+        # If display_name is set, use it instead of name for HA display
+        if self._entity.display_name:
+            config["name"] = self._entity.display_name
         # Add the MQTT topics to be discovered by HA
         topics = {
             "state_topic": self.state_topic,
